@@ -31,9 +31,9 @@ void test_pool() {
     bytes = pool_read(&pool2, &reader, read, sizeof(int) * 2);
     assert(read[0] == 4);
     assert(read[1] == 5);
-    pool_write(&pool2, array, sizeof(int) * 6);
-    bytes = pool_read(&pool2, &reader, read, sizeof(int) * 6);
-    for (int i = 0; i < 4; i++) {
+    pool_write(&pool2, array, sizeof(int) * 3);
+    bytes = pool_read(&pool2, &reader, read, sizeof(int) * 3);
+    for (int i = 0; i < 3; i++) {
       assert(read[i] == i);
     }
   }

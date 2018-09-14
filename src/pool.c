@@ -35,12 +35,9 @@ gen_index_t increment_index(
   ssize_t capacity,
   ssize_t increment
 ) {
-  //XXX properly fill buffer
-  if (gi.index + increment > capacity) {
-    gi.index = 0;
-    gi.generation++;
-  }
-  gi.index += increment;
+  ssize_t initial = gi.index;
+  gi.index = (gi.index + increment) % capacity;
+  if (gi.index < initial || increment == capacity) gi.generation++;
   return gi;
 }
 
@@ -78,11 +75,19 @@ int write_queue_process(pool_t* pool) {
 void pool_write(pool_t* pool, void* src, ssize_t bytes) {
   pthread_mutex_lock(&pool->mutex);
   void* addr = &pool->buffer[pool->current.index];
+  gen_index_t initial = pool->current;
   pool->current = increment_index(pool->current, pool->capacity, bytes);
   pool->writers++;
   write_t* write = write_queue_enqueue(&pool->write_queue, bytes);
   pthread_mutex_unlock(&pool->mutex);
-  memcpy(addr, src, bytes);
+  if (pool->current.index < initial.index) {
+    //split write
+    ssize_t first_bytes = pool->capacity - initial.index;
+    memcpy(addr, src, first_bytes);
+    memcpy(pool->buffer, src + first_bytes, bytes - first_bytes);
+  } else {
+    memcpy(addr, src, bytes);
+  }
   pthread_mutex_lock(&pool->mutex);
   pool->writers--;
   write->done = 1;
@@ -124,7 +129,7 @@ ssize_t pool_read(
     ssize_t actual_bytes = 0;
     if (first_bytes > 0) {
       actual_bytes = copy(pool, pool_reader, dst, first_bytes, bytes);
-      if (actual_bytes < bytes) return actual_bytes;
+      if (actual_bytes <= bytes) return actual_bytes;
     }
     ssize_t second_bytes = safe.index;
     actual_bytes +=

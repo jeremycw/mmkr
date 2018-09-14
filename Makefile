@@ -1,4 +1,4 @@
-SOURCES=server.c tictoc.c pool.c atomic_send.c
+SOURCES=server.c tictoc.c pool.c
 TEST_SRCS=merge_sort.c segment.c pool.c
 BINARY_NAME=mmkr
 LFLAGS+=-lpthread

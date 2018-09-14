@@ -37,42 +37,42 @@ typedef uint64_t u64;
 #define Guarded_Assert_WinErr(expression) \
   if(!(expression))\
   { ReportLastWindowsError();\
-    error("Windows call failed: %s\n\tIn %s (line: %u)\n", #expression, __FILE__ , __LINE__ );\
+  error("Windows call failed: %s\n\tIn %s (line: %u)\n", #expression, __FILE__ , __LINE__ );\
   }
 void ReportLastWindowsError(void) 
 { //EnterCriticalSection( _get_reporting_critical_section() );
   { // Retrieve the system error message for the last-error code
 
-    LPVOID lpMsgBuf;
-    LPVOID lpDisplayBuf;
-    DWORD dw = GetLastError(); 
+  LPVOID lpMsgBuf;
+  LPVOID lpDisplayBuf;
+  DWORD dw = GetLastError(); 
 
-    FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | 
-        FORMAT_MESSAGE_FROM_SYSTEM |
-        FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL,
-        dw,
-        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPTSTR) &lpMsgBuf,
-        0, NULL );
+  FormatMessage(
+    FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+    FORMAT_MESSAGE_FROM_SYSTEM |
+    FORMAT_MESSAGE_IGNORE_INSERTS,
+    NULL,
+    dw,
+    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+    (LPTSTR) &lpMsgBuf,
+    0, NULL );
 
-    // Display the error message and exit the process
+  // Display the error message and exit the process
 
-    lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, 
-        (lstrlen((LPCTSTR)lpMsgBuf) + 40) * sizeof(TCHAR)); 
-    StringCchPrintf((LPTSTR)lpDisplayBuf, 
-        LocalSize(lpDisplayBuf) / sizeof(TCHAR),
-        TEXT("Failed with error %d: %s"), 
-        dw, lpMsgBuf); 
-    
-    // spam formated string to listeners
-    { 
-      fprintf(stderr,"%s",lpDisplayBuf);
-    }
+  lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, 
+    (lstrlen((LPCTSTR)lpMsgBuf) + 40) * sizeof(TCHAR)); 
+  StringCchPrintf((LPTSTR)lpDisplayBuf, 
+    LocalSize(lpDisplayBuf) / sizeof(TCHAR),
+    TEXT("Failed with error %d: %s"), 
+    dw, lpMsgBuf); 
+  
+  // spam formated string to listeners
+  { 
+    fprintf(stderr,"%s",lpDisplayBuf);
+  }
 
-    LocalFree(lpMsgBuf);
-    LocalFree(lpDisplayBuf);
+  LocalFree(lpMsgBuf);
+  LocalFree(lpDisplayBuf);
   }
   //LeaveCriticalSection( _get_reporting_critical_section() );
 }
@@ -98,20 +98,20 @@ TicTocTimer tic(void)
 #ifdef HAVE_WIN32_TIMER
   { LARGE_INTEGER tmp;
  
-    Guarded_Assert_WinErr( QueryPerformanceFrequency( &tmp ) );
-    t.rate = tmp.QuadPart;
-    Guarded_Assert_WinErr( QueryPerformanceCounter  ( &tmp ) );
-    t.last = tmp.QuadPart;
+  Guarded_Assert_WinErr( QueryPerformanceFrequency( &tmp ) );
+  t.rate = tmp.QuadPart;
+  Guarded_Assert_WinErr( QueryPerformanceCounter  ( &tmp ) );
+  t.last = tmp.QuadPart;
   }
 #endif
   
 #ifdef DEBUG_TIC_TOC_TIMER  
   //Guarded_Assert( t.rate > 0 );
   debug("Tic() timer frequency: %llu Hz\r\n"
-        "           resolution: %g ns\r\n"
-        "               counts: %llu\r\n",t.rate, 
-                                        1e9/(double)t.rate, 
-                                        t.last);
+    "       resolution: %g ns\r\n"
+    "         counts: %llu\r\n",t.rate, 
+                    1e9/(double)t.rate, 
+                    t.last);
 #endif  
   g_last = t;
   return t;
@@ -125,8 +125,8 @@ double toc(TicTocTimer *t)
   if(!t) t=&g_last;
 #ifdef HAVE_POSIX_TIMER
   { struct timespec time;
-    clock_gettime(CLOCKID,&time);
-    now = time.tv_sec*1000000000LL+time.tv_nsec;
+  clock_gettime(CLOCKID,&time);
+  now = time.tv_sec*1000000000LL+time.tv_nsec;
   }
 #endif
 #ifdef HAVE_MACH_TIMER
@@ -134,8 +134,8 @@ double toc(TicTocTimer *t)
 #endif
 #ifdef HAVE_WIN32_TIMER
   { LARGE_INTEGER tmp;
-    Guarded_Assert_WinErr( QueryPerformanceCounter( &tmp ) );
-    now = tmp.QuadPart;
+  Guarded_Assert_WinErr( QueryPerformanceCounter( &tmp ) );
+  now = tmp.QuadPart;
   }
 #endif
   delta = ( now - t->last) / (double)t->rate;

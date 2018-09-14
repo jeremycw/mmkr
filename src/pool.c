@@ -1,12 +1,15 @@
 #include <stdlib.h>
 #include <pthread/pthread.h>
 #include <string.h>
+#include <assert.h>
 
 #include "pool.h"
 
 void pool_new(pool_t* pool, ssize_t capacity) {
   pool->current.generation = 0;
   pool->current.index = 0;
+  pool->safe.generation = 0;
+  pool->safe.index = 0;
   pool->writers = 0;
   pool->capacity = capacity;
   pool->buffer = malloc(pool->capacity);
@@ -19,6 +22,7 @@ void pool_new(pool_t* pool, ssize_t capacity) {
 }
 
 write_t* write_queue_enqueue(write_queue_t* write_queue, ssize_t bytes) {
+  assert(write_queue->tail < write_queue->capacity);
   write_queue->queue[write_queue->tail].done = 0;
   write_queue->queue[write_queue->head].bytes = bytes;
   write_t* w = &write_queue->queue[write_queue->tail];
@@ -31,14 +35,13 @@ gen_index_t increment_index(
   ssize_t capacity,
   ssize_t increment
 ) {
-  gen_index_t new;
   //XXX properly fill buffer
-  if (gi.index + increment >= capacity) {
-    new.index = 0;
-    new.generation = gi.generation + 1;
+  if (gi.index + increment > capacity) {
+    gi.index = 0;
+    gi.generation++;
   }
-  new.index = gi.index + increment;
-  return new;
+  gi.index += increment;
+  return gi;
 }
 
 int cmp_index(gen_index_t a, gen_index_t b) {
@@ -59,11 +62,15 @@ int write_queue_process(pool_t* pool) {
   write_queue_t* write_queue = &pool->write_queue;
   while (
     write_queue->queue[write_queue->head].done
-    && write_queue->head <= write_queue->tail
+    && write_queue->head < write_queue->tail
   ) {
     ssize_t bytes = write_queue->queue[write_queue->head].bytes;
     pool->safe = increment_index(pool->safe, pool->capacity, bytes);
     write_queue->head++;
+  }
+  if (write_queue->head == write_queue->tail) {
+    write_queue->head = 0;
+    write_queue->tail = 0;
   }
   return cmp_index(initial, pool->safe);
 }
@@ -114,8 +121,11 @@ ssize_t pool_read(
     return copy(pool, pool_reader, dst, diff, bytes);
   } else {
     ssize_t first_bytes = pool->capacity - pool_reader->index;
-    ssize_t actual_bytes = copy(pool, pool_reader, dst, first_bytes, bytes);
-    if (actual_bytes < bytes) return actual_bytes;
+    ssize_t actual_bytes = 0;
+    if (first_bytes > 0) {
+      actual_bytes = copy(pool, pool_reader, dst, first_bytes, bytes);
+      if (actual_bytes < bytes) return actual_bytes;
+    }
     ssize_t second_bytes = safe.index;
     actual_bytes +=
       copy(pool, pool_reader, dst + first_bytes, second_bytes, bytes);

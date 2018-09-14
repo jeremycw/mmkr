@@ -37,9 +37,9 @@ typedef struct {
   int lobby_count;
 } server_t;
 
-void merge_sort(join_t* in, int n);
 void get_expired(join_t* joins, int n, join_t** start, int* count);
 void segment(join_t* joins, int n, segment_t* segments, int* segment_count);
 void assign_timeouts(segment_t* segments, int n, lobby_conf_t* confs, int m);
+int sort_join_by_lobby_id_score(void* a, void* b);
 
 #endif

@@ -4,54 +4,6 @@
 
 #include "server.h"
 
-#define LOBBY_LT a1[a1i].lobby_id < a2[a2i].lobby_id
-#define LOBBY_EQ a1[a1i].lobby_id == a2[a2i].lobby_id
-#define SCORE_LT a1[a1i].score < a2[a2i].score
-#define NOT_EXPIRED !(a1[a1i].timeout <= 0.f)
-#define A1_NOT_EMPTY !(a1i == size)
-#define A2_EMPTY a2i == a2size
-
-void merge_sort(join_t* in, int n) {
-  int size = 1;
-  join_t* array = in;
-  join_t* aux = malloc(sizeof(join_t) * n);
-  while (size < n) {
-    int index = 0;
-    for (int base = 0; base < n; base += size * 2) {
-      int a1i = 0;
-      int a2i = 0;
-      join_t* a1 = &array[base];
-      join_t* a2 = &array[base + size];
-      int a2size = base + size * 2 > n ? n % size : size;
-      while (a1i != size || a2i != a2size) {
-        if (
-          A2_EMPTY
-          || (
-            A1_NOT_EMPTY
-            && NOT_EXPIRED
-            && (LOBBY_LT || (LOBBY_EQ && SCORE_LT))
-          )
-        ) {
-          aux[index] = a1[a1i++];
-        } else {
-          aux[index] = a2[a2i++];
-        }
-        index++;
-      }
-    }
-    size *= 2;
-    join_t* tmp = array;
-    array = aux;
-    aux = tmp;
-  }
-  if (array != in) {
-    memcpy(in, array, sizeof(join_t) * n);
-    free(array);
-  } else {
-    free(aux);
-  }
-}
-
 void get_expired(join_t* joins, int n, join_t** start, int* count) {
   *count = 0;
   for (int i = n-1; i >= 0; i--) {
@@ -62,6 +14,17 @@ void get_expired(join_t* joins, int n, join_t** start, int* count) {
       return;
     }
   }
+}
+
+int sort_join_by_lobby_id_score(void* a, void* b) {
+    join_t* ja = a;
+    join_t* jb = b;
+    return
+      ja->timeout > 0.f
+      && (
+        ja->lobby_id < jb->lobby_id
+        || (ja->lobby_id == jb->lobby_id && ja->score < jb->score)
+      );
 }
 
 void segment(join_t* joins, int n, segment_t* segments, int* segment_count) {

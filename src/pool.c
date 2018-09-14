@@ -115,6 +115,13 @@ ssize_t pool_read(
   void* dst,
   ssize_t bytes
 ) {
+  //reader too far behind writes, lost data
+  if (
+    pool_reader->index < pool->current.index
+    && pool_reader->generation < pool->current.generation
+  ) {
+    return -1;
+  }
   pthread_mutex_lock(&pool->mutex);
   if (cmp_index(*pool_reader, pool->safe) != -1) {
     pthread_cond_wait(&pool->cond, &pool->mutex);

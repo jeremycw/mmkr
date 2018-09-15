@@ -41,7 +41,7 @@ typedef struct {
 
 void pool_new(pool_t* pool, ssize_t capacity);
 void pool_write(pool_t* pool, void* src, ssize_t size);
-void pool_swap(pool_t* pool, void** out, int* index, unsigned int flags);
+void pool_swap(pool_t* pool, void** out, ssize_t* index, unsigned int flags);
 ssize_t pool_read(pool_t* pool, pool_reader_t* pool_reader, void* dst, ssize_t size);
 pool_reader_t pool_new_reader(pool_t* pool);
 

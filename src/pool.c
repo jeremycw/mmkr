@@ -143,7 +143,7 @@ ssize_t pool_read(
   }
 }
 
-void pool_swap(pool_t* pool, void** out, int* bytes, unsigned int flags) {
+void pool_swap(pool_t* pool, void** out, ssize_t* bytes, unsigned int flags) {
   //TODO swap should invalidate readers
   pthread_mutex_lock(&pool->mutex);
   if (

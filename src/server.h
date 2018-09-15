@@ -32,8 +32,15 @@ typedef struct {
 } segment_t;
 
 typedef struct {
+    int socket;
+    pool_t* pool;
+} write_pool_t;
+
+typedef struct {
   pool_t join_pool;
   lobby_conf_t* configs;
+  write_pool_t write_pools[16];
+  int write_pool_index;
   int lobby_count;
 } server_t;
 

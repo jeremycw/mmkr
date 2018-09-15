@@ -48,10 +48,10 @@ void test_pool() {
   {
     pool_t pool2;
     pool_new(&pool2, sizeof(int) * 4);
+    pool_reader_t reader = pool_new_reader(&pool2);
     int array[6] = {0, 1, 2, 3, 4, 5};
     pool_write(&pool2, array, sizeof(int) * 4);
     int read[6];
-    pool_reader_t reader = {0, 0};
     size_t bytes = pool_read(&pool2, &reader, read, sizeof(int) * 4);
     assert(bytes == sizeof(int) * 4);
     for (int i = 0; i < 4; i++) {

@@ -160,3 +160,10 @@ void pool_swap(pool_t* pool, void** out, int* bytes, unsigned int flags) {
   pool->current.index = 0;
   pthread_mutex_unlock(&pool->mutex);
 }
+
+pool_reader_t pool_new_reader(pool_t* pool) {
+  pthread_mutex_lock(&pool->mutex);
+  pool_reader_t reader = pool->safe;
+  pthread_mutex_unlock(&pool->mutex);
+  return reader;
+}

@@ -24,7 +24,7 @@ void pool_new(pool_t* pool, ssize_t capacity) {
 write_t* write_queue_enqueue(write_queue_t* write_queue, ssize_t bytes) {
   assert(write_queue->tail < write_queue->capacity);
   write_queue->queue[write_queue->tail].done = 0;
-  write_queue->queue[write_queue->head].bytes = bytes;
+  write_queue->queue[write_queue->tail].bytes = bytes;
   write_t* w = &write_queue->queue[write_queue->tail];
   write_queue->tail = (write_queue->tail + 1) % write_queue->capacity;
   return w;
@@ -54,8 +54,7 @@ int cmp_index(gen_index_t a, gen_index_t b) {
   }
 }
 
-int write_queue_process(pool_t* pool) {
-  gen_index_t initial = pool->safe;
+void write_queue_process(pool_t* pool) {
   write_queue_t* write_queue = &pool->write_queue;
   while (
     write_queue->queue[write_queue->head].done
@@ -69,7 +68,6 @@ int write_queue_process(pool_t* pool) {
     write_queue->head = 0;
     write_queue->tail = 0;
   }
-  return cmp_index(initial, pool->safe);
 }
 
 void pool_write(pool_t* pool, void* src, ssize_t bytes) {

@@ -1,6 +1,36 @@
 #include <assert.h>
 #include <stdlib.h>
+#include <string.h>
+#include <pthread/pthread.h>
 #include "../src/pool.h"
+
+void* producer(void* arg) {
+  pool_t* pool = arg;
+  int data[1024];
+  for (int i = 0; i < 1024; i++) {
+    data[i] = i;
+  }
+  for (int i = 0; i < 10000; i++) {
+    pool_write(pool, data, sizeof(data));
+    usleep(100);
+  }
+  return NULL;
+}
+
+void* consumer(void* arg) {
+  pool_t* pool = arg;
+  int data[1024];
+  int reference[1024];
+  for (int i = 0; i < 1024; i++) {
+    reference[i] = i;
+  }
+  for (int i = 0; i < 10000; i++) {
+    pool_reader_t reader;
+    pool_read(pool, &reader, data, sizeof(data));
+    assert(memcmp(data, reference, sizeof(data)) == 0);
+  }
+  return NULL;
+}
 
 void test_pool() {
   {
@@ -36,5 +66,15 @@ void test_pool() {
     for (int i = 0; i < 3; i++) {
       assert(read[i] == i);
     }
+  }
+
+  {
+    pool_t pool;
+    pool_new(&pool, 8 * 1024 * 1024);
+    pthread_t p, c;
+    pthread_create(&p, NULL, producer, &pool);
+    pthread_create(&c, NULL, consumer, &pool);
+    pthread_join(p, NULL);
+    pthread_join(c, NULL);
   }
 }

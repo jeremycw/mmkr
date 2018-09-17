@@ -29,7 +29,9 @@ void* socket_read_thread(void* arg) {
     if (bytes > 0) {
       bytes_left_over = (bytes % sizeof(join_t));
       ssize_t bytes_to_transfer = bytes - bytes_left_over;
-      pool_write(join_pool, buf, bytes_to_transfer);
+      write_t* write = pool_alloc_block_for_write(join_pool, bytes_to_transfer);
+      memcpy(write->buf, buf, bytes_to_transfer);
+      pool_commit_write(join_pool, write);
       memcpy(buf, buf + bytes_to_transfer, bytes_left_over);
     } else if (bytes == 0) {
       close(socket);
@@ -45,10 +47,9 @@ void* socket_write_thread(void* arg) {
   write_pool_t* write_pool = arg;
   int socket = write_pool->socket;
   pool_reader_t reader = pool_new_reader(write_pool->pool);
-  char buf[WRITE_BUFFFER_SIZE];
-  ssize_t bytes;
+  void* buf;
   while (1) {
-    bytes = pool_read(write_pool->pool, &reader, buf, WRITE_BUFFFER_SIZE);
+    ssize_t bytes = pool_read(write_pool->pool, &reader, &buf, -1);
     assert(bytes > 0);
     ssize_t sent = send(socket, buf, bytes, 0);
     if (sent < 0) {
@@ -80,6 +81,7 @@ int main() {
   }
 
   pool_new(&server.join_pool, 1024 * 1024 * 8);
+  pool_reader_t reader = pool_new_reader(&server.join_pool);
 
   while (1) {
     TicTocTimer clock = tic();
@@ -103,8 +105,7 @@ int main() {
     }
 
     join_t* new_joins;
-    ssize_t bytes;
-    pool_swap(&server.join_pool, (void**)&new_joins, &bytes, POOL_NO_FLAGS);
+    ssize_t bytes = pool_read(&server.join_pool, &reader, (void**)&new_joins, -1);
     int n = bytes / sizeof(join_t);
     merge_sort(new_joins, n, sizeof(join_t), sort_join_by_lobby_id_score);
     int segment_count;

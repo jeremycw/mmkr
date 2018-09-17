@@ -11,7 +11,9 @@ void* producer(void* arg) {
     data[i] = i;
   }
   for (int i = 0; i < 1000; i++) {
-    pool_write(pool, data, sizeof(data));
+    write_t* write = pool_alloc_block_for_write(pool, 1, sizeof(data));
+    memcpy(write->buf, data, sizeof(data));
+    pool_commit_write(pool, write);
     usleep(100);
   }
   return NULL;
@@ -19,15 +21,15 @@ void* producer(void* arg) {
 
 void* consumer(void* arg) {
   pool_t* pool = arg;
-  int data[1024];
+  int* data;
   int reference[1024];
   for (int i = 0; i < 1024; i++) {
     reference[i] = i;
   }
   for (int i = 0; i < 1000; i++) {
     pool_reader_t reader;
-    pool_read(pool, &reader, data, sizeof(data));
-    assert(memcmp(data, reference, sizeof(data)) == 0);
+    pool_read(pool, &reader, (void**)&data, sizeof(reference));
+    assert(memcmp(data, reference, sizeof(reference)) == 0);
   }
   return NULL;
 }
@@ -45,68 +47,67 @@ void* str_producer(void* arg) {
   pool_t* pool = a->pool;
   char* str = a->str;
   for (int i = 0; i < 2000; i++) {
-    pool_write(pool, str, strlen(str) + 1);
+    int bytes = strlen(str) + 1;
+    write_t* write = pool_alloc_block_for_write(pool, 1, bytes);
+    memcpy(write->buf, str, bytes);
+    pool_commit_write(pool, write);
     usleep(100);
   }
   return NULL;
 }
 
 void* str_consumer(void* arg) {
-  char str[1024];
   pool_t* pool = arg;
   int count = 0;
-  int index = 0;
+  char* ptr;
   pool_reader_t reader = pool_new_reader(pool);
+  ssize_t bytes;
   while (count < 4000) {
-    do {
-      ssize_t bytes = pool_read(pool, &reader, str + index, 1);
-      assert(bytes > 0);
-      index++;
-    } while (str[index-1]);
-    assert(
-      strcmp(str, str1) == 0
-      || strcmp(str, str2) == 0
-    );
-    index = 0;
-    count++;
+    bytes = pool_read(pool, &reader, (void**)&ptr, -1);
+    assert(bytes > 0);
+    while (bytes > 0) {
+      assert(
+        strcmp(ptr, str1) == 0
+        || strcmp(ptr, str2) == 0
+      );
+      int len = strlen(ptr);
+      bytes -= len + 1;
+      ptr += len+1;
+      count++;
+    }
   }
   return NULL;
 }
 
 void test_pool() {
   {
-    pool_t pool;
-    pool_new(&pool, 1024);
-    int test = 123456789;
-    int* ptr;
-    int bytes;
-    pool_write(&pool, &test, 4);
-    pool_swap(&pool, (void*)&ptr, &bytes, 0);
-    assert(*ptr == 123456789);
-    assert(bytes == 4);
-  }
-
-  {
     pool_t pool2;
     pool_new(&pool2, sizeof(int) * 4);
     pool_reader_t reader = pool_new_reader(&pool2);
     int array[6] = {0, 1, 2, 3, 4, 5};
-    pool_write(&pool2, array, sizeof(int) * 4);
-    int read[6];
-    size_t bytes = pool_read(&pool2, &reader, read, sizeof(int) * 4);
+    write_t* write = pool_alloc_block_for_write(&pool2, 4, sizeof(int));
+    memcpy(write->buf, array, sizeof(int) * 4);
+    pool_commit_write(&pool2, write);
+    int* read;
+    size_t bytes = pool_read(&pool2, &reader, (void**)&read, -1);
     assert(bytes == sizeof(int) * 4);
     for (int i = 0; i < 4; i++) {
       assert(read[i] == i);
     }
-    pool_write(&pool2, &array[4], sizeof(int) * 2);
-    bytes = pool_read(&pool2, &reader, read, sizeof(int) * 2);
+    write = pool_alloc_block_for_write(&pool2, 2, sizeof(int));
+    memcpy(write->buf, &array[4], sizeof(int) * 2);
+    pool_commit_write(&pool2, write);
+    bytes = pool_read(&pool2, &reader, (void**)&read, -1);
     assert(read[0] == 4);
     assert(read[1] == 5);
-    pool_write(&pool2, array, sizeof(int) * 3);
-    bytes = pool_read(&pool2, &reader, read, sizeof(int) * 3);
-    for (int i = 0; i < 3; i++) {
-      assert(read[i] == i);
-    }
+    write = pool_alloc_block_for_write(&pool2, 3, sizeof(int));
+    memcpy(write->buf, array, sizeof(int) * 3);
+    pool_commit_write(&pool2, write);
+    bytes = pool_read(&pool2, &reader, (void**)&read, -1);
+    assert(read[0] == 0);
+    assert(read[1] == 1);
+    bytes = pool_read(&pool2, &reader, (void**)&read, -1);
+    assert(read[0] == 4);
   }
 
   {

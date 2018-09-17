@@ -16,6 +16,7 @@ typedef struct {
 typedef gen_index_t pool_reader_t;
 
 typedef struct {
+  void* buf;
   ssize_t bytes;
   int done;
 } write_t;
@@ -36,13 +37,14 @@ typedef struct {
   gen_index_t current;
   gen_index_t safe;
   write_queue_t write_queue;
+  ssize_t empty_at_end;
   int writers;
 } pool_t;
 
 void pool_new(pool_t* pool, ssize_t capacity);
-void pool_write(pool_t* pool, void* src, ssize_t size);
-void pool_swap(pool_t* pool, void** out, ssize_t* index, unsigned int flags);
-ssize_t pool_read(pool_t* pool, pool_reader_t* pool_reader, void* dst, ssize_t size);
+ssize_t pool_read(pool_t* pool, pool_reader_t* pool_reader, void** dst, ssize_t bytes);
 pool_reader_t pool_new_reader(pool_t* pool);
+write_t* pool_alloc_block_for_write(pool_t* pool, int nmemb, int size);
+void pool_commit_write(pool_t* pool, write_t* write);
 
 #endif

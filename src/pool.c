@@ -12,6 +12,7 @@ void pool_new(pool_t* pool, ssize_t capacity) {
   pool->safe.index = 0;
   pool->writers = 0;
   pool->capacity = capacity;
+  pool->empty_at_end = 0;
   pool->buffer = malloc(pool->capacity);
   pool->write_queue.head = 0;
   pool->write_queue.tail = 0;
@@ -35,9 +36,12 @@ gen_index_t increment_index(
   ssize_t capacity,
   ssize_t increment
 ) {
-  ssize_t initial = gi.index;
-  gi.index = (gi.index + increment) % capacity;
-  if (gi.index < initial || increment == capacity) gi.generation++;
+  if (gi.index + increment >= capacity) {
+    gi.index = 0;
+    gi.generation++;
+  } else {
+    gi.index += increment;
+  }
   return gi;
 }
 
@@ -70,22 +74,23 @@ void write_queue_process(pool_t* pool) {
   }
 }
 
-void pool_write(pool_t* pool, void* src, ssize_t bytes) {
+write_t* pool_alloc_block_for_write(pool_t* pool, int nmemb, int size) {
+  ssize_t bytes = nmemb * size;
   pthread_mutex_lock(&pool->mutex);
   void* addr = &pool->buffer[pool->current.index];
-  gen_index_t initial = pool->current;
+  ssize_t initial_index = pool->current.index;
   pool->current = increment_index(pool->current, pool->capacity, bytes);
+  if (pool->current.index == 0) {
+    pool->empty_at_end = (pool->capacity - initial_index) % bytes;
+  }
   pool->writers++;
   write_t* write = write_queue_enqueue(&pool->write_queue, bytes);
   pthread_mutex_unlock(&pool->mutex);
-  if (pool->current.index < initial.index) {
-    //split write
-    ssize_t first_bytes = pool->capacity - initial.index;
-    memcpy(addr, src, first_bytes);
-    memcpy(pool->buffer, src + first_bytes, bytes - first_bytes);
-  } else {
-    memcpy(addr, src, bytes);
-  }
+  write->buf = addr;
+  return write;
+}
+
+void pool_commit_write(pool_t* pool, write_t* write) {
   pthread_mutex_lock(&pool->mutex);
   pool->writers--;
   write->done = 1;
@@ -94,24 +99,11 @@ void pool_write(pool_t* pool, void* src, ssize_t bytes) {
   pthread_mutex_unlock(&pool->mutex);
 }
 
-ssize_t copy(
-  pool_t* pool,
-  pool_reader_t* reader,
-  void* dst,
-  ssize_t safe_bytes,
-  ssize_t desired_bytes
-) {
-  ssize_t bytes = safe_bytes > desired_bytes ? desired_bytes : safe_bytes;
-  memcpy(dst, &pool->buffer[reader->index], bytes);
-  *reader = increment_index(*reader, pool->capacity, bytes);
-  return bytes;
-}
-
 ssize_t pool_read(
   pool_t* pool,
   pool_reader_t* pool_reader,
-  void* dst,
-  ssize_t bytes
+  void** dst,
+  ssize_t max_bytes
 ) {
   //reader too far behind writes, lost data
   if (
@@ -126,38 +118,35 @@ ssize_t pool_read(
   }
   gen_index_t safe = pool->safe;
   pthread_mutex_unlock(&pool->mutex);
-  if (safe.index > pool_reader->index) {
-    ssize_t diff = safe.index - pool_reader->index;
-    return copy(pool, pool_reader, dst, diff, bytes);
+  *dst = &pool->buffer[pool_reader->index];
+  ssize_t remaining_read_bytes;
+  if (pool_reader->generation == safe.generation) {
+    remaining_read_bytes = safe.index - pool_reader->index;
   } else {
-    ssize_t first_bytes = pool->capacity - pool_reader->index;
-    ssize_t actual_bytes = 0;
-    if (first_bytes > 0) {
-      actual_bytes = copy(pool, pool_reader, dst, first_bytes, bytes);
-      if (actual_bytes <= bytes) return actual_bytes;
-    }
-    ssize_t second_bytes = safe.index;
-    actual_bytes +=
-      copy(pool, pool_reader, dst + first_bytes, second_bytes, bytes);
-    return actual_bytes;
+    remaining_read_bytes = pool->capacity - pool->empty_at_end - pool_reader->index;
   }
+  ssize_t actual_bytes = remaining_read_bytes > max_bytes && max_bytes != -1 ?
+    max_bytes : remaining_read_bytes;
+  ssize_t adjusted_capacity = pool->capacity - pool->empty_at_end;
+  *pool_reader = increment_index(*pool_reader, adjusted_capacity, actual_bytes);
+  return actual_bytes;
 }
 
-void pool_swap(pool_t* pool, void** out, ssize_t* bytes, unsigned int flags) {
-  //TODO swap should invalidate readers
-  pthread_mutex_lock(&pool->mutex);
-  if (
-    pool->writers > 0
-    || (flags & POOL_WAIT_FOR_DATA && pool->current.index == 0)
-  ) {
-    pthread_cond_wait(&pool->cond, &pool->mutex);
-  }
-  *bytes = pool->current.index;
-  *out = pool->buffer;
-  pool->buffer = malloc(pool->capacity);
-  pool->current.index = 0;
-  pthread_mutex_unlock(&pool->mutex);
-}
+//void pool_swap(pool_t* pool, void** out, ssize_t* bytes, unsigned int flags) {
+//  //TODO swap should invalidate readers
+//  pthread_mutex_lock(&pool->mutex);
+//  if (
+//    pool->writers > 0
+//    || (flags & POOL_WAIT_FOR_DATA && pool->current.index == 0)
+//  ) {
+//    pthread_cond_wait(&pool->cond, &pool->mutex);
+//  }
+//  *bytes = pool->current.index;
+//  *out = pool->buffer;
+//  pool->buffer = malloc(pool->capacity);
+//  pool->current.index = 0;
+//  pthread_mutex_unlock(&pool->mutex);
+//}
 
 pool_reader_t pool_new_reader(pool_t* pool) {
   pthread_mutex_lock(&pool->mutex);

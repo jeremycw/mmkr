@@ -11,7 +11,7 @@ void* producer(void* arg) {
     data[i] = i;
   }
   for (int i = 0; i < 1000; i++) {
-    write_t* write = pool_alloc_block_for_write(pool, 1, sizeof(data));
+    write_t* write = pool_alloc_block_for_write(pool, sizeof(data));
     memcpy(write->buf, data, sizeof(data));
     pool_commit_write(pool, write);
     usleep(100);
@@ -48,7 +48,7 @@ void* str_producer(void* arg) {
   char* str = a->str;
   for (int i = 0; i < 2000; i++) {
     int bytes = strlen(str) + 1;
-    write_t* write = pool_alloc_block_for_write(pool, 1, bytes);
+    write_t* write = pool_alloc_block_for_write(pool, bytes);
     memcpy(write->buf, str, bytes);
     pool_commit_write(pool, write);
     usleep(100);
@@ -85,7 +85,7 @@ void test_pool() {
     pool_new(&pool2, sizeof(int) * 4);
     pool_reader_t reader = pool_new_reader(&pool2);
     int array[6] = {0, 1, 2, 3, 4, 5};
-    write_t* write = pool_alloc_block_for_write(&pool2, 4, sizeof(int));
+    write_t* write = pool_alloc_block_for_write(&pool2, 4 * sizeof(int));
     memcpy(write->buf, array, sizeof(int) * 4);
     pool_commit_write(&pool2, write);
     int* read;
@@ -94,20 +94,20 @@ void test_pool() {
     for (int i = 0; i < 4; i++) {
       assert(read[i] == i);
     }
-    write = pool_alloc_block_for_write(&pool2, 2, sizeof(int));
+    write = pool_alloc_block_for_write(&pool2, 2 * sizeof(int));
     memcpy(write->buf, &array[4], sizeof(int) * 2);
     pool_commit_write(&pool2, write);
     bytes = pool_read(&pool2, &reader, (void**)&read, -1);
     assert(read[0] == 4);
     assert(read[1] == 5);
-    write = pool_alloc_block_for_write(&pool2, 3, sizeof(int));
+    write = pool_alloc_block_for_write(&pool2, 3 * sizeof(int));
     memcpy(write->buf, array, sizeof(int) * 3);
     pool_commit_write(&pool2, write);
     bytes = pool_read(&pool2, &reader, (void**)&read, -1);
+    assert(bytes == sizeof(int) * 3);
     assert(read[0] == 0);
     assert(read[1] == 1);
-    bytes = pool_read(&pool2, &reader, (void**)&read, -1);
-    assert(read[0] == 4);
+    assert(read[2] == 2);
   }
 
   {

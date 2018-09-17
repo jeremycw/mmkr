@@ -44,7 +44,7 @@ typedef struct {
 void pool_new(pool_t* pool, ssize_t capacity);
 ssize_t pool_read(pool_t* pool, pool_reader_t* pool_reader, void** dst, ssize_t bytes);
 pool_reader_t pool_new_reader(pool_t* pool);
-write_t* pool_alloc_block_for_write(pool_t* pool, int nmemb, int size);
+write_t* pool_alloc_block_for_write(pool_t* pool, ssize_t bytes);
 void pool_commit_write(pool_t* pool, write_t* write);
 
 #endif

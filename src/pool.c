@@ -36,11 +36,13 @@ gen_index_t increment_index(
   ssize_t capacity,
   ssize_t increment
 ) {
-  if (gi.index + increment >= capacity) {
-    gi.index = 0;
+  ssize_t initial = gi.index;
+  if (gi.index + increment > capacity) {
+    gi.index = increment;
     gi.generation++;
   } else {
-    gi.index += increment;
+    gi.index = (gi.index + increment) % capacity;
+    if (gi.index < initial || increment == capacity) gi.generation++;
   }
   return gi;
 }
@@ -74,14 +76,14 @@ void write_queue_process(pool_t* pool) {
   }
 }
 
-write_t* pool_alloc_block_for_write(pool_t* pool, int nmemb, int size) {
-  ssize_t bytes = nmemb * size;
+write_t* pool_alloc_block_for_write(pool_t* pool, ssize_t bytes) {
   pthread_mutex_lock(&pool->mutex);
   void* addr = &pool->buffer[pool->current.index];
-  ssize_t initial_index = pool->current.index;
+  gen_index_t initial = pool->current;
   pool->current = increment_index(pool->current, pool->capacity, bytes);
-  if (pool->current.index == 0) {
-    pool->empty_at_end = (pool->capacity - initial_index) % bytes;
+  if (pool->current.generation > initial.generation) {
+    addr = pool->buffer;
+    pool->empty_at_end = (pool->capacity - initial.index) % bytes;
   }
   pool->writers++;
   write_t* write = write_queue_enqueue(&pool->write_queue, bytes);
@@ -105,6 +107,10 @@ ssize_t pool_read(
   void** dst,
   ssize_t max_bytes
 ) {
+  if (pool->capacity - pool_reader->index == pool->empty_at_end) {
+    pool_reader->index = 0;
+    pool_reader->generation++;
+  }
   //reader too far behind writes, lost data
   if (
     pool_reader->index < pool->current.index

@@ -37,7 +37,7 @@ typedef struct {
   gen_index_t current;
   gen_index_t safe;
   write_queue_t write_queue;
-  ssize_t empty_at_end;
+  int end_padding;
   int writers;
 } pool_t;
 

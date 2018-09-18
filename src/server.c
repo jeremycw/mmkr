@@ -4,27 +4,47 @@
 
 #include "server.h"
 
-void get_expired(join_t* joins, int n, join_t** start, int* count) {
-  *count = 0;
-  for (int i = n-1; i >= 0; i--) {
-    if (joins[i].timeout <= 0.f) {
-      *count += 1;
-      *start = &joins[i];
+//void get_expired(join_t* joins, int n, join_t** start, int* count) {
+//  *count = 0;
+//  for (int i = n-1; i >= 0; i--) {
+//    if (joins[i].timeout <= 0.f) {
+//      *count += 1;
+//      *start = &joins[i];
+//    } else {
+//      return;
+//    }
+//  }
+//}
+
+void tick_timers(join_t* joins, int* expirations, int n, int* nexp, float delta) {
+  int index = 0;
+  *nexp = 0;
+  for (int i = 0; i < n; i++) {
+    joins[i].timeout -= delta;
+    if (joins[i].timeout > 0.f) {
+      joins[index] = joins[i];
+      index++;
     } else {
-      return;
+      expirations[*nexp] = joins[i].user_id;
+      *nexp += 1;
     }
   }
 }
 
+void expand_off_wire(join_request_t* requests, join_t* joins, int n) {
+  for (int i = 0; i < n; i++) {
+    joins[i].lobby_id = requests[i].lobby_id;
+    joins[i].score = requests[i].score;
+    joins[i].timeout = 30.f;
+  }
+}
+
 int sort_join_by_lobby_id_score(void* a, void* b) {
-    join_t* ja = a;
-    join_t* jb = b;
-    return
-      ja->timeout > 0.f
-      && (
-        ja->lobby_id < jb->lobby_id
-        || (ja->lobby_id == jb->lobby_id && ja->score < jb->score)
-      );
+  join_t* ja = a;
+  join_t* jb = b;
+  return
+    ja->lobby_id < jb->lobby_id
+    || (ja->lobby_id == jb->lobby_id && ja->score < jb->score);
 }
 
 void segment(join_t* joins, int n, segment_t* segments, int* segment_count) {

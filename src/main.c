@@ -10,7 +10,6 @@
 #include "merge_sort.h"
 
 #define READ_BUFFFER_SIZE 4096
-#define WRITE_BUFFFER_SIZE 4096
 
 typedef struct {
   pool_t* join_pool;
@@ -30,7 +29,11 @@ void* socket_read_thread(void* arg) {
       bytes_left_over = (bytes % sizeof(join_t));
       ssize_t bytes_to_transfer = bytes - bytes_left_over;
       write_t* write = pool_alloc_block_for_write(join_pool, bytes_to_transfer);
-      memcpy(write->buf, buf, bytes_to_transfer);
+      expand_off_wire(
+        buf + bytes_left_over,
+        write->buf,
+        bytes / sizeof(join_request_t)
+      );
       pool_commit_write(join_pool, write);
       memcpy(buf, buf + bytes_to_transfer, bytes_left_over);
     } else if (bytes == 0) {
@@ -57,6 +60,15 @@ void* socket_write_thread(void* arg) {
       return NULL;
     }
   }
+}
+
+void* expire_requests(void* arg) {
+  join_t* joins;
+  int n;
+  int nexp;
+  int* expirations = malloc(sizeof(int) * n);
+  tick_timers(joins, expirations, n, &nexp, 0.01f);
+
 }
 
 int main() {
@@ -117,8 +129,22 @@ int main() {
       server.configs,
       server.lobby_count
     );
-    //merge waiting and new joins
-    //match
+    join_t* joins = malloc(sizeof(join_t) * (n + server.njoins));
+    int index = 0;
+    merge(
+      new_joins,
+      server.joins,
+      joins,
+      n,
+      server.njoins,
+      sizeof(join_t),
+      &index,
+      sort_join_by_lobby_id_score
+    );
+    free(server.joins);
+    n += server.njoins;
+    int nexp;
+    segment(joins, n, segments, &segment_count);
     //write matches
     //write expireds
     //

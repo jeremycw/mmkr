@@ -56,5 +56,6 @@ void assign_timeouts(segment_t* segments, int n, lobby_conf_t* confs, int m);
 int sort_join_by_lobby_id_score(void* a, void* b);
 void expand_off_wire(join_request_t* requests, join_t* joins, int n);
 void tick_timers(join_t* joins, int* expirations, int n, int* nexp, float delta);
+void match(join_t* joins, match_t* matches, int* nmat, int n, int max, int min);
 
 #endif

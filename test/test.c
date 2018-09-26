@@ -5,4 +5,5 @@ int main() {
   test_segment();
   test_pool();
   test_parallel_map();
+  test_match();
 }

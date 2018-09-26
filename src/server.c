@@ -4,18 +4,6 @@
 
 #include "server.h"
 
-//void get_expired(join_t* joins, int n, join_t** start, int* count) {
-//  *count = 0;
-//  for (int i = n-1; i >= 0; i--) {
-//    if (joins[i].timeout <= 0.f) {
-//      *count += 1;
-//      *start = &joins[i];
-//    } else {
-//      return;
-//    }
-//  }
-//}
-
 void tick_timers(join_t* joins, int* expirations, int n, int* nexp, float delta) {
   int index = 0;
   *nexp = 0;
@@ -88,29 +76,38 @@ void assign_timeouts(segment_t* segments, int n, lobby_conf_t* confs, int m) {
   }
 }
 
-//void match(join_t* joins, int n, lobby_conf_t* configs, int m) {
-//  //get max user count
-//  int max_user_count = 2;
-//  int min_user_count = 2;
-//  pool_t pool;
-//  pool_new(&pool, sizeof(match_t) * n/min_user_count + sizeof(int) * max_user_count * n/min_user_count);
-//  lobby_conf_t config;
-//  match_t* match = pool_alloc(&pool, sizeof(match_t) + sizeof(int) * config.max_user_count);
-//  match->lobby_id = joins[0].lobby_id;
-//  match->user_count = 0;
-//  for (int i = 0; i < n; i++) {
-//    if (joins[i].lobby_id == match->lobby_id) {
-//      match->user_ids[match->user_count++] = joins[i].user_id;
-//    } else {
-//      //finalize match
-//    }
-//
-//  }
-//  match_t* matches;
-//  int mi = 0;
-//  for (int i = 0; i < n; i += 2) {
-//    if (joins[i].lobby_id == joins[i+1].lobby_id) {
-//      uuid_generate_time(matches[mi].uuid);
-//    }
-//  }
-//}
+void match_segments(
+  segment_t* segments, int nseg,
+  lobby_conf_t* configs, int ncon,
+  match_t* matches, int* nmat
+) {
+  for (int i = 0; i < nseg; i++) {
+    lobby_conf_t conf = find_lobby_config(configs, ncon, segments[i].lobby_id);
+    match(
+      segments[i].ptr,
+      matches,
+      nmat,
+      segments[i].n,
+      conf.max_user_count,
+      conf.min_user_count
+    );
+  }
+
+}
+
+void match(join_t* joins, match_t* matches, int* nmat, int n, int max, int min) {
+  int match_count = n / max;
+  if (n % max >= min) match_count++;
+  for (int i = 0; i < match_count; i++) {
+    uuid_t uuid;
+    uuid_generate_time(uuid);
+    joins = &joins[i];
+    matches = &matches[i];
+    int players = i == match_count-1 ? min : max;
+    for (int j = 0; j < players; j++) {
+      uuid_copy(matches[j].uuid, uuid);
+      matches[j].user_id = joins[j].user_id;
+      *nmat += 1;
+    }
+  }
+}

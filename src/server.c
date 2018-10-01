@@ -101,12 +101,12 @@ void match(join_t* joins, match_t* matches, int* nmat, int n, int max, int min) 
   for (int i = 0; i < match_count; i++) {
     uuid_t uuid;
     uuid_generate_time(uuid);
-    joins = &joins[i];
-    matches = &matches[i];
+    join_t* subjoins = &joins[*nmat];
+    match_t* submatches = &matches[*nmat];
     int players = i == match_count-1 ? min : max;
     for (int j = 0; j < players; j++) {
-      uuid_copy(matches[j].uuid, uuid);
-      matches[j].user_id = joins[j].user_id;
+      uuid_copy(submatches[j].uuid, uuid);
+      submatches[j].user_id = subjoins[j].user_id;
       *nmat += 1;
     }
   }

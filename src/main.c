@@ -12,13 +12,13 @@
 #define READ_BUFFFER_SIZE 4096
 
 typedef struct {
-  pool_t* join_pool;
+  pool_t* pool;
   int socket;
-} socket_read_thread_arg_t;
+} socket_pool_t;
 
 void* socket_read_thread(void* arg) {
-  socket_read_thread_arg_t* a = arg;
-  pool_t* join_pool = a->join_pool;
+  socket_pool_t* a = arg;
+  pool_t* in_pool = a->pool;
   int socket = a->socket;
   char buf[READ_BUFFFER_SIZE];
   size_t bytes_left_over = 0;
@@ -28,13 +28,13 @@ void* socket_read_thread(void* arg) {
     if (bytes > 0) {
       bytes_left_over = (bytes % sizeof(join_t));
       ssize_t bytes_to_transfer = bytes - bytes_left_over;
-      write_t* write = pool_alloc_block_for_write(join_pool, bytes_to_transfer);
+      write_t* write = pool_alloc_block_for_write(in_pool, bytes_to_transfer);
       expand_off_wire(
         buf + bytes_left_over,
         write->buf,
         bytes / sizeof(join_request_t)
       );
-      pool_commit_write(join_pool, write);
+      pool_commit_write(in_pool, write);
       memcpy(buf, buf + bytes_to_transfer, bytes_left_over);
     } else if (bytes == 0) {
       close(socket);
@@ -47,12 +47,13 @@ void* socket_read_thread(void* arg) {
 }
 
 void* socket_write_thread(void* arg) {
-  write_pool_t* write_pool = arg;
-  int socket = write_pool->socket;
-  pool_reader_t reader = pool_new_reader(write_pool->pool);
+  socket_pool_t* a = arg;
+  int socket = a->socket;
+  pool_t* out_pool = a->pool;
+  pool_reader_t reader = pool_new_reader(out_pool);
   void* buf;
   while (1) {
-    ssize_t bytes = pool_read(write_pool->pool, &reader, &buf, -1);
+    ssize_t bytes = pool_read(out_pool, &reader, &buf, -1);
     assert(bytes > 0);
     ssize_t sent = send(socket, buf, bytes, 0);
     if (sent < 0) {
@@ -60,15 +61,6 @@ void* socket_write_thread(void* arg) {
       return NULL;
     }
   }
-}
-
-void* expire_requests(void* arg) {
-  join_t* joins;
-  int n;
-  int nexp;
-  int* expirations = malloc(sizeof(int) * n);
-  tick_timers(joins, expirations, n, &nexp, 0.01f);
-
 }
 
 int main() {
@@ -92,59 +84,60 @@ int main() {
     listen_poller.fd = s;
   }
 
-  pool_new(&server.join_pool, 1024 * 1024 * 8);
-  pool_reader_t reader = pool_new_reader(&server.join_pool);
+  pool_new(&server.in_pool, 1024 * 1024 * 8);
+  pool_reader_t reader = pool_new_reader(&server.in_pool);
+  pool_new(&server.out_pool, 1024 * 1024 * 8);
 
   while (1) {
     TicTocTimer clock = tic();
     if (poll(&listen_poller, 1, 0)) {
       if (listen_poller.revents & POLLIN) {
         socklen_t len = sizeof(addr);
-        socket_read_thread_arg_t* arg =
-          malloc(sizeof(socket_read_thread_arg_t));
-        arg->socket = accept(s, (struct sockaddr *)&addr, &len);
-        arg->join_pool = &server.join_pool;
+        socket_pool_t* arg =
+          malloc(sizeof(socket_pool_t));
+        int socket = accept(s, (struct sockaddr *)&addr, &len);
+        arg->socket = socket;
+        arg->pool = &server.in_pool;
         pthread_t reader, writer;
         pthread_create(&reader, NULL, socket_read_thread, arg);
-        assert(server.write_pool_index < 16);
-        pool_t* pool = malloc(sizeof(pool_t));
-        pool_new(pool, 1024 * 1024);
-        server.write_pools[server.write_pool_index].pool = pool;
-        server.write_pools[server.write_pool_index].socket = arg->socket;
-        server.write_pool_index++;
+        arg = malloc(sizeof(socket_pool_t));
+        arg->socket = socket;
+        arg->pool = &server.out_pool;
         pthread_create(&writer, NULL, socket_write_thread, arg);
       }
     }
 
-    join_t* new_joins;
-    ssize_t bytes = pool_read(&server.join_pool, &reader, (void**)&new_joins, -1);
-    int n = bytes / sizeof(join_t);
-    merge_sort(new_joins, n, sizeof(join_t), sort_join_by_lobby_id_score);
-    int segment_count;
-    segment_t* segments = malloc(sizeof(segment_t) * server.lobby_count);
-    segment(new_joins, n, segments, &segment_count);
+    join_t* joins;
+    ssize_t bytes = pool_read(&server.in_pool, &reader, (void**)&joins, -1);
+    int njoins = bytes / sizeof(join_t);
+    merge_sort(joins, njoins, sizeof(join_t), sort_join_by_lobby_id_score);
+    int nseg;
+    segment_t* segments = malloc(sizeof(segment_t) * server.nlob);
+    segment(joins, njoins, segments, &nseg);
     assign_timeouts(
       segments,
-      segment_count,
+      nseg,
       server.configs,
-      server.lobby_count
+      server.nlob
     );
-    join_t* joins = malloc(sizeof(join_t) * (n + server.njoins));
+    join_t* joins = malloc(sizeof(join_t) * (njoins + server.njoins));
     int index = 0;
     merge(
-      new_joins,
+      joins,
       server.joins,
       joins,
-      n,
+      njoins,
       server.njoins,
       sizeof(join_t),
       &index,
       sort_join_by_lobby_id_score
     );
     free(server.joins);
-    n += server.njoins;
-    int nexp;
-    segment(joins, n, segments, &segment_count);
+    njoins += server.njoins;
+    segment(joins, njoins, segments, &nseg);
+    match_t* matches = malloc(sizeof(match_t) * njoins);
+    int nmat;
+    match_segments(segments, nseg, server.configs, server.nlob, matches, &nmat);
     //write matches
     //write expireds
     //

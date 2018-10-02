@@ -92,7 +92,6 @@ void match_segments(
       conf.min_user_count
     );
   }
-
 }
 
 void match(join_t* joins, match_t* matches, int* nmat, int n, int max, int min) {

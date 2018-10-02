@@ -12,9 +12,9 @@ typedef struct {
 } join_t;
 
 typedef struct {
-    int lobby_id;
-    int user_id;
-    int score;
+  int lobby_id;
+  int user_id;
+  int score;
 } join_request_t;
 
 typedef struct {
@@ -36,26 +36,24 @@ typedef struct {
 } segment_t;
 
 typedef struct {
-    int socket;
-    pool_t* pool;
-} write_pool_t;
-
-typedef struct {
-  pool_t join_pool;
+  pool_t in_pool;
+  pool_t out_pool;
   lobby_conf_t* configs;
-  write_pool_t write_pools[16];
-  int write_pool_index;
-  int lobby_count;
   join_t* joins;
+  int nlob;
   int njoins;
 } server_t;
 
-void get_expired(join_t* joins, int n, join_t** start, int* count);
-void segment(join_t* joins, int n, segment_t* segments, int* segment_count);
+void segment(join_t* joins, int njoins, segment_t* segments, int* nseg);
 void assign_timeouts(segment_t* segments, int n, lobby_conf_t* confs, int m);
 int sort_join_by_lobby_id_score(void* a, void* b);
 void expand_off_wire(join_request_t* requests, join_t* joins, int n);
 void tick_timers(join_t* joins, int* expirations, int n, int* nexp, float delta);
 void match(join_t* joins, match_t* matches, int* nmat, int n, int max, int min);
+void match_segments(
+  segment_t* segments, int nseg,
+  lobby_conf_t* configs, int ncon,
+  match_t* matches, int* nmat
+);
 
 #endif

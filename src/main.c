@@ -8,8 +8,12 @@
 #include "server.h"
 #include "pool.h"
 #include "merge_sort.h"
+#include "parallel_map.h"
 
 #define READ_BUFFFER_SIZE 4096
+
+parallel_map_declare(segment_t)
+parallel_map_define(segment_t)
 
 typedef struct {
   pool_t* pool;
@@ -30,7 +34,7 @@ void* socket_read_thread(void* arg) {
       ssize_t bytes_to_transfer = bytes - bytes_left_over;
       write_t* write = pool_alloc_block_for_write(in_pool, bytes_to_transfer);
       expand_off_wire(
-        buf + bytes_left_over,
+        (join_request_t*)buf + bytes_left_over,
         write->buf,
         bytes / sizeof(join_request_t)
       );
@@ -63,11 +67,29 @@ void* socket_write_thread(void* arg) {
   }
 }
 
+typedef struct {
+  lobby_t* lobbies;
+  pool_t* out_pool;
+  int nlob;
+} match_map_arg_t;
+
+void match_mapfn(segment_t* segments, int start, int n, void* arg) {
+  match_map_arg_t* a = arg;
+  assert(n == 1);
+  segment_t* segment = &segments[start];
+  lobby_t lobby = find_lobby_config(a->lobbies, a->nlob, segment->lobby_id);
+  int nmat = match_count(segment->n, lobby.max_user_count, lobby.min_user_count);
+  write_t* write = pool_alloc_block_for_write(a->out_pool, sizeof(match_t) * nmat);
+  match(segment->ptr, segment->n, write->buf, lobby.max_user_count, lobby.min_user_count);
+  pool_commit_write(a->out_pool, write);
+}
+
 int main() {
   server_t server;
   int s = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in addr;
   struct pollfd listen_poller;
+  threadpool thpool = thpool_init(4);
 
   //bind & listen
   {
@@ -107,23 +129,23 @@ int main() {
       }
     }
 
-    join_t* joins;
-    ssize_t bytes = pool_read(&server.in_pool, &reader, (void**)&joins, -1);
+    join_t* new_joins;
+    ssize_t bytes = pool_read(&server.in_pool, &reader, (void**)&new_joins, -1);
     int njoins = bytes / sizeof(join_t);
-    merge_sort(joins, njoins, sizeof(join_t), sort_join_by_lobby_id_score);
+    merge_sort(new_joins, njoins, sizeof(join_t), sort_join_by_lobby_id_score);
     int nseg;
     segment_t* segments = malloc(sizeof(segment_t) * server.nlob);
-    segment(joins, njoins, segments, &nseg);
+    segment(new_joins, njoins, segments, &nseg);
     assign_timeouts(
       segments,
       nseg,
-      server.configs,
+      server.lobbies,
       server.nlob
     );
     join_t* joins = malloc(sizeof(join_t) * (njoins + server.njoins));
     int index = 0;
     merge(
-      joins,
+      new_joins,
       server.joins,
       joins,
       njoins,
@@ -135,10 +157,11 @@ int main() {
     free(server.joins);
     njoins += server.njoins;
     segment(joins, njoins, segments, &nseg);
-    match_t* matches = malloc(sizeof(match_t) * njoins);
-    int nmat;
-    match_segments(segments, nseg, server.configs, server.nlob, matches, &nmat);
-    //write matches
+    match_map_arg_t arg;
+    arg.lobbies = server.lobbies;
+    arg.nlob = server.nlob;
+    arg.out_pool = &server.out_pool;
+    parallel_map(segment_t, thpool, nseg, segments, nseg, &arg, match_mapfn);
     //write expireds
     //
     double delay = 0.01 - toc(&clock);

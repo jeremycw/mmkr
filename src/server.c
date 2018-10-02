@@ -58,55 +58,43 @@ void segment(join_t* joins, int n, segment_t* segments, int* segment_count) {
   }
 }
 
-lobby_conf_t find_lobby_config(lobby_conf_t* configs, int n, int lobby_id) {
+lobby_t find_lobby_config(lobby_t* configs, int n, int lobby_id) {
   for (int i = 0; i < n; i++) {
     if (configs[i].lobby_id == lobby_id) return configs[i];
   }
-  lobby_conf_t not_found;
+  lobby_t not_found;
   not_found.lobby_id = -1;
   return not_found;
 }
 
-void assign_timeouts(segment_t* segments, int n, lobby_conf_t* confs, int m) {
+void assign_timeouts(segment_t* segments, int n, lobby_t* confs, int m) {
   for (int i = 0; i < n; i++) {
-    lobby_conf_t conf = find_lobby_config(confs, m, segments[i].lobby_id);
+    lobby_t conf = find_lobby_config(confs, m, segments[i].lobby_id);
     for (int j = 0; j < segments[i].n; j++) {
       segments[i].ptr[j].timeout = conf.timeout;
     }
   }
 }
 
-void match_segments(
-  segment_t* segments, int nseg,
-  lobby_conf_t* configs, int ncon,
-  match_t* matches, int* nmat
-) {
-  for (int i = 0; i < nseg; i++) {
-    lobby_conf_t conf = find_lobby_config(configs, ncon, segments[i].lobby_id);
-    match(
-      segments[i].ptr,
-      matches,
-      nmat,
-      segments[i].n,
-      conf.max_user_count,
-      conf.min_user_count
-    );
-  }
+int match_count(int njoins, int max, int min) {
+  int count = njoins / max * max;
+  return njoins - count >= min ? count + min : count;
 }
 
-void match(join_t* joins, match_t* matches, int* nmat, int n, int max, int min) {
+void match(join_t* joins, int n, match_t* matches, int max, int min) {
+  int count = 0;
   int match_count = n / max;
   if (n % max >= min) match_count++;
   for (int i = 0; i < match_count; i++) {
     uuid_t uuid;
     uuid_generate_time(uuid);
-    join_t* subjoins = &joins[*nmat];
-    match_t* submatches = &matches[*nmat];
+    join_t* subjoins = &joins[count];
+    match_t* submatches = &matches[count];
     int players = i == match_count-1 ? min : max;
     for (int j = 0; j < players; j++) {
       uuid_copy(submatches[j].uuid, uuid);
       submatches[j].user_id = subjoins[j].user_id;
-      *nmat += 1;
+      count++;
     }
   }
 }

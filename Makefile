@@ -52,7 +52,7 @@ $(TEST_DIR)/%.o: $(TEST_SRC_DIR)/%.c | $(TEST_DIR)
 	$(CC) -c -g -MMD $(CFLAGS) $< -o $@
 
 $(ASM_DIR)/%.s: $(SRC_DIR)/%.c | $(ASM_DIR)
-	$(CC) -S -O3 $(CFLAGS) $< -o $@
+	$(CC) -S -O3 -mllvm --x86-asm-syntax=intel $(CFLAGS) $< -o $@
 
 $(DEBUG_DIR):
 	mkdir -p $@

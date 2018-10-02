@@ -13,9 +13,7 @@ void test_match() {
   match_t matches[8];
   int min = 2;
   int max = 3;
-  int nmat;
-  match(joins, matches, &nmat, 8, max, min);
-  assert(nmat == 8);
+  match(joins, 8, matches, max, min);
   assert(matches[0].user_id == 1);
   char uuid1[37];
   char uuid2[37];

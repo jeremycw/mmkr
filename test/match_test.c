@@ -1,6 +1,6 @@
 #include <assert.h>
 #include <string.h>
-#include "../src/server.h"
+#include "../src/core.h"
 
 void test_match() {
   join_t joins[8];

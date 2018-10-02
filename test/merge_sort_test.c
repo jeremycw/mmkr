@@ -1,5 +1,5 @@
 #include <assert.h>
-#include "../src/server.h"
+#include "../src/core.h"
 #include "../src/merge_sort.h"
 
 void test_merge_sort() {

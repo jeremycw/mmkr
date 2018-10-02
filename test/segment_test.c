@@ -1,6 +1,6 @@
 #include <assert.h>
 #include <stdlib.h>
-#include "../src/server.h"
+#include "../src/core.h"
 
 void test_segment() {
   join_t joins[6];

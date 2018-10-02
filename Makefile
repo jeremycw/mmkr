@@ -1,4 +1,4 @@
-SOURCES=server.c tictoc.c pool.c merge_sort.c thpool.c
+SOURCES=server.c tictoc.c pool.c merge_sort.c thpool.c core.c
 TEST_SRCS=merge_sort_test.c segment_test.c pool_test.c parallel_map_test.c match_test.c
 BINARY_NAME=mmkr
 LFLAGS+=-lpthread

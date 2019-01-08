@@ -4,16 +4,16 @@
 
 #include "core.h"
 
-void tick_timers(join_t* joins, int* expirations, int n, int* nexp, float delta) {
+void tick_timers(array(join_t) joins, int* expirations, int* nexp, float delta) {
   int index = 0;
   *nexp = 0;
-  for (int i = 0; i < n; i++) {
-    joins[i].timeout -= delta;
-    if (joins[i].timeout > 0.f) {
-      joins[index] = joins[i];
+  for (int i = 0; i < joins.n; i++) {
+    joins.buf[i].timeout -= delta;
+    if (joins.buf[i].timeout > 0.f) {
+      joins.buf[index] = joins.buf[i];
       index++;
     } else {
-      expirations[*nexp] = joins[i].user_id;
+      expirations[*nexp] = joins.buf[i].user_id;
       *nexp += 1;
     }
   }
@@ -35,43 +35,43 @@ int sort_join_by_lobby_id_score(void* a, void* b) {
     || (ja->lobby_id == jb->lobby_id && ja->score < jb->score);
 }
 
-void segment(join_t* joins, int n, segment_t* segments, int* segment_count) {
-  if (n == 0) {
+void segment(array(join_t) joins, segment_t* segments, int* segment_count) {
+  if (joins.n == 0) {
     *segment_count = 0;
     return;
   }
   segment_t* segment = segments;
   *segment_count = 1;
-  segment->ptr = joins;
-  segment->n = 0;
-  segment->lobby_id = joins[0].lobby_id;
-  for (int i = 0; i < n; i++) {
-    if (segment->lobby_id == joins[i].lobby_id) {
-      segment->n++;
+  segment->joins = joins;
+  segment->joins.n = 0;
+  segment->lobby_id = joins.buf[0].lobby_id;
+  for (int i = 0; i < joins.n; i++) {
+    if (segment->lobby_id == joins.buf[i].lobby_id) {
+      segment->joins.n++;
     } else {
       *segment_count += 1;
       segment++;
-      segment->n = 1;
-      segment->ptr = &joins[i];
-      segment->lobby_id = joins[i].lobby_id;
+      segment->joins.n = 1;
+      segment->joins.buf = &joins.buf[i];
+      segment->lobby_id = joins.buf[i].lobby_id;
     }
   }
 }
 
-lobby_t find_lobby_config(lobby_t* configs, int n, int lobby_id) {
-  for (int i = 0; i < n; i++) {
-    if (configs[i].lobby_id == lobby_id) return configs[i];
+lobby_t find_lobby_config(array(lobby_t) lobbies, int lobby_id) {
+  for (int i = 0; i < lobbies.n; i++) {
+    if (lobbies.buf[i].lobby_id == lobby_id) return lobbies.buf[i];
   }
   lobby_t not_found;
   not_found.lobby_id = -1;
   return not_found;
 }
 
-void assign_timeouts(segment_t* segments, int n, lobby_t* confs, int m) {
-  for (int i = 0; i < n; i++) {
-    lobby_t conf = find_lobby_config(confs, m, segments[i].lobby_id);
-    for (int j = 0; j < segments[i].n; j++) {
-      segments[i].ptr[j].timeout = conf.timeout;
+void assign_timeouts(array(segment_t) segments, array(lobby_t) lobbies) {
+  for (int i = 0; i < segments.n; i++) {
+    lobby_t lobby = find_lobby_config(lobbies, segments.buf[i].lobby_id);
+    for (int j = 0; j < segments.buf[i].joins.n; j++) {
+      segments.buf[i].joins.buf[j].timeout = lobby.timeout;
     }
   }
 }
@@ -81,14 +81,14 @@ int match_count(int njoins, int max, int min) {
   return njoins - count >= min ? count + min : count;
 }
 
-void match(join_t* joins, int n, match_t* matches, int max, int min) {
+void match(array(join_t) joins, match_t* matches, int max, int min) {
   int count = 0;
-  int match_count = n / max;
-  if (n % max >= min) match_count++;
+  int match_count = joins.n / max;
+  if (joins.n % max >= min) match_count++;
   for (int i = 0; i < match_count; i++) {
     uuid_t uuid;
     uuid_generate_time(uuid);
-    join_t* subjoins = &joins[count];
+    join_t* subjoins = &joins.buf[count];
     match_t* submatches = &matches[count];
     int players = i == match_count-1 ? min : max;
     for (int j = 0; j < players; j++) {

@@ -3,6 +3,7 @@
 
 #include <uuid/uuid.h>
 #include "pool.h"
+#include "array.h"
 
 typedef struct {
   int lobby_id;
@@ -10,6 +11,8 @@ typedef struct {
   int score;
   float timeout;
 } join_t;
+
+array_declare(join_t)
 
 typedef struct {
   int lobby_id;
@@ -24,33 +27,34 @@ typedef struct {
   float timeout;
 } lobby_t;
 
+array_declare(lobby_t)
+
 typedef struct {
   uuid_t uuid;
   int user_id;
 } match_t;
 
 typedef struct {
-  join_t* ptr;
-  int n;
+  array(join_t) joins;
   int lobby_id;
 } segment_t;
+
+array_declare(segment_t)
 
 typedef struct {
   pool_t in_pool;
   pool_t out_pool;
-  lobby_t* lobbies;
-  join_t* joins;
-  int nlob;
-  int njoins;
+  array(lobby_t) lobbies;
+  array(join_t) joins;
 } server_t;
 
-void segment(join_t* joins, int njoins, segment_t* segments, int* nseg);
-void assign_timeouts(segment_t* segments, int n, lobby_t* lobbies, int m);
+void segment(array(join_t) joins, segment_t* segments, int* nseg);
+void assign_timeouts(array(segment_t) segments, array(lobby_t) lobbies);
 int sort_join_by_lobby_id_score(void* a, void* b);
 void expand_off_wire(join_request_t* requests, join_t* joins, int n);
-void tick_timers(join_t* joins, int* expirations, int n, int* nexp, float delta);
-void match(join_t* joins, int n, match_t* matches, int max, int min);
+void tick_timers(array(join_t) joins, int* expirations, int* nexp, float delta);
+void match(array(join_t) joins, match_t* matches, int max, int min);
 int match_count(int njoins, int max, int min);
-lobby_t find_lobby_config(lobby_t* configs, int n, int lobby_id);
+lobby_t find_lobby_config(array(lobby_t) lobbies, int lobby_id);
 
 #endif
